@@ -1,0 +1,1 @@
+Send your commit message body to a language tool server and have it checked.
