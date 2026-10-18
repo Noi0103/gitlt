@@ -139,6 +139,7 @@
 
         packages = {
           default = gitlt;
+          inherit gitlt;
         };
 
         apps.default = flake-utils.lib.mkApp {
