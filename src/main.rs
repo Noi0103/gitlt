@@ -1,24 +1,44 @@
-mod cli;
+mod args;
 
 use anyhow::Result;
+use args::Args;
 use ariadne::{Color, Label, Report, ReportKind, Source};
 use clap::Parser;
-use cli::Cli;
 use git2::{Commit, Repository};
 use languagetool_rust::api::check::{Match, Request};
 use languagetool_rust::api::server::ServerClient;
-use std::env;
+use std::{env, fs};
+
+use crate::args::Settings;
 
 #[tokio::main]
 async fn main() -> Result<()> {
     println!("Hello, world!\n");
 
-    // cli
-    let args = Cli::parse();
+    // Use cli arguments...
+    let cli = Args::parse();
+
+    // ...or fallback to config file...
+    let config_file: Args =
+        match fs::read_to_string(&format!("{}/.config/gitlt/config.toml", env::var("HOME")?)) {
+            Ok(text) => match toml::from_str(&text) {
+                Ok(some) => some,
+                Err(err) => {
+                    println!("parsing config failed: {}", err);
+                    Args::default()
+                }
+            },
+            Err(err) => {
+                println!("reading config failed: {}", err);
+                Args::default()
+            }
+        };
+
+    // ...or fallback to defaults.
+    let settings = Settings::new(cli.or(config_file));
 
     // get lt client
-    let hostname = "http://".to_owned() + &args.address;
-    let client = ServerClient::new(&hostname, &args.port);
+    let client = ServerClient::new(&settings.host, &format!("{}", settings.port));
     let ping = client.ping().await?;
     println!("client ping with: {}ms", ping);
 
@@ -48,7 +68,7 @@ async fn main() -> Result<()> {
     let mut request = Request::new()
         .with_language("auto".to_owned())
         .with_text(commit_message_body);
-    request.level = languagetool_rust::api::check::Level::Picky;
+    request.level = settings.level;
 
     println!(
         "request constructed with language: {:?} and level {:?}",
